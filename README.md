@@ -1,2 +1,2 @@
-# agent-skills
-Personal collection of skills
+# agent-toolbox
+Personal collection of skills, scripts, templates etc....
