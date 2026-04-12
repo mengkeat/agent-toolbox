@@ -2,6 +2,8 @@
 
 Personal collection of skills, scripts, templates, and extensions for AI coding agents.
 
+Many of the skills and extensions were sourced from [mitsuhiko/agent-stuff](https://github.com/mitsuhiko/agent-stuff).
+
 ## Skills
 
 Reference guides loaded by an agent at runtime to steer its behavior on a specific task.
