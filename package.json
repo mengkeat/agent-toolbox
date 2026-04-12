@@ -1,0 +1,9 @@
+{
+  "name": "agent-toolbox",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "diff": "^7.0.0",
+    "@sinclair/typebox": "^0.33.0"
+  }
+}
