@@ -1,5 +1,5 @@
 ---
-name: Simplify
+name: simplify
 description: Instructions for simplifying code
 ---
 # Simplify: Code Review and Cleanup
