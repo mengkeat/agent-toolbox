@@ -31,8 +31,10 @@ Review the same changes for hacky patterns:
 3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
 4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
 5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
-6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
-7. **Unnecessary comments**: comments explaining WHAT the code does (well-named identifiers already do that), narrating the change, or referencing the task/caller — delete; keep only non-obvious WHY (hidden constraints, subtle invariants, workarounds)
+6. **Inconsistent or bad naming**: new names that don't follow existing conventions, are misleading, or are too generic/vague
+7. **Unclear logic**: complex or non-obvious code that could be simplified, clarified, or better documented
+8. **Unclear naming**: names of variables, functions, structs, class, modules that are misleading, too generic, is not self explainatory. Making it hard to understand code / intent
+9. **Long functions**: functions that have grown too large and should be modularized into more focused functions
 
 ### Agent 3: Efficiency Review
 
