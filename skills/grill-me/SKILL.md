@@ -7,11 +7,12 @@ Interview me relentlessly about every aspect of this plan until we reach a share
 
 Present all the questions at once in the form of a list of questions, with each questions followed by a list of possible answers, and your recommended answer highlighted. For example:
 
-What database should we use?
-   1. MySQL (Recommended)
-   2. PostgreSQL
-   3. MongoDB    
+1. What database should we use?
+   a. MySQL (Recommended)
+   b. PostgreSQL
+   c. MongoDB    
 
 If a question can be answered by exploring the codebase, explore the codebase instead.
 
-I will then go through the questions one-by-one on my own to answer them. Before we start iterating on the next round.
+If the plan or design originates from a file, append the entire list of questions , choices and recommended answers to the end of the
+same file.  I will then go through the questions one-by-one on my own to answer them. Before we start iterating on the next round.
