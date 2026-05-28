@@ -35,6 +35,7 @@ Review the same changes for hacky patterns:
 7. **Unclear logic**: complex or non-obvious code that could be simplified, clarified, or better documented
 8. **Unclear naming**: names of variables, functions, structs, class, modules that are misleading, too generic, is not self explainatory. Making it hard to understand code / intent
 9. **Long functions**: functions that have grown too large and should be modularized into more focused functions
+10. **Comments**: Do not remove comments that are marked with TODO
 
 ### Agent 3: Efficiency Review
 
