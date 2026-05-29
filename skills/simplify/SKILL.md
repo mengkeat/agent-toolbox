@@ -34,8 +34,8 @@ Review the same changes for hacky patterns:
 6. **Inconsistent or bad naming**: new names that don't follow existing conventions, are misleading, or are too generic/vague
 7. **Unclear logic**: complex or non-obvious code that could be simplified, clarified, or better documented
 8. **Unclear naming**: names of variables, functions, structs, class, modules that are misleading, too generic, is not self explainatory. Making it hard to understand code / intent
-9. **Long functions**: functions that have grown too large and should be modularized into more focused functions
-10. **Comments**: Do not remove comments that are marked with TODO
+9. **Complexity**: code with high cyclomatic complexity, deep nesting, or multiple responsibilities that could be broken down into simpler, more focused functions or modules
+10. **Comments**: Do not remove comments. However, flag any comments that indicate technical debt, inconsistencies or a hacky workaround that should be addressed properly instead of just documented.
 
 ### Agent 3: Efficiency Review
 
