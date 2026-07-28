@@ -1,5 +1,5 @@
-import type { ExtensionAPI, ExtensionContext, ModelSelectEvent, ThinkingLevel } from "@mariozechner/pi-coding-agent";
-import { CustomEditor, ModelSelectorComponent, SettingsManager } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { CustomEditor, ModelSelectorComponent, SettingsManager } from "@earendil-works/pi-coding-agent";
 import path from "node:path";
 import os from "node:os";
 import fs from "node:fs/promises";
@@ -10,6 +10,7 @@ import type { Dirent } from "node:fs";
 // =============================================================================
 
 type ModeName = string;
+type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 
 type ModeSpec = {
 	provider?: string;
@@ -231,7 +232,7 @@ function applyModesPatch(target: ModesFile, patch: ModesPatch): void {
 			continue;
 		}
 
-		const targetSpec: Record<string, unknown> = ((target.modes[mode] ??= {}) as any) ?? {};
+		const targetSpec: Record<string, unknown> = (target.modes[mode] ??= {}) as Record<string, unknown>;
 		for (const [k, v] of Object.entries(specPatch)) {
 			if (v === null || v === undefined) {
 				delete targetSpec[k];
@@ -334,8 +335,7 @@ function orderedModeNames(modes: Record<string, ModeSpec>): string[] {
 	return Object.keys(modes).filter((name) => name !== CUSTOM_MODE_NAME);
 }
 
-function getModeBorderColor(ctx: ExtensionContext, pi: ExtensionAPI, mode: string): (text: string) => string {
-	const theme = ctx.ui.theme;
+function getModeBorderColor(theme: any, pi: ExtensionAPI, mode: string): (text: string) => string {
 	const spec = runtime.data.modes[mode];
 
 	// Explicit color override in JSON.
@@ -350,7 +350,11 @@ function getModeBorderColor(ctx: ExtensionContext, pi: ExtensionAPI, mode: strin
 	}
 
 	// Default: derive from the current thinking level.
-	return theme.getThinkingBorderColor(pi.getThinkingLevel());
+	try {
+		return theme.getThinkingBorderColor(pi.getThinkingLevel());
+	} catch {
+		return theme.getThinkingBorderColor("off");
+	}
 }
 
 function formatModeLabel(mode: string): string {
@@ -971,7 +975,18 @@ class PromptEditor extends CustomEditor {
 		const scrollPrefixMatch = topPlain.match(/^(─── ↑ \d+ more )/);
 		const prefix = scrollPrefixMatch?.[1] ?? "──";
 
-		let label = formatModeLabel(mode);
+		const labelColor = this.modeLabelColor ?? ((text: string) => this.borderColor(text));
+		const isBashMode = this.getText().trimStart().startsWith("!");
+		const labelParts: Array<{ text: string; color: (text: string) => string }> = [
+			{ text: formatModeLabel(mode), color: labelColor },
+		];
+		if (isBashMode) {
+			labelParts.push(
+				{ text: " ", color: labelColor },
+				{ text: "──", color: (text: string) => this.borderColor(text) },
+				{ text: " bash", color: labelColor },
+			);
+		}
 
 		// Compute how much room we have for the label core (without truncating the prefix).
 		const labelLeftSpace = prefix.endsWith(" ") ? "" : " ";
@@ -979,17 +994,37 @@ class PromptEditor extends CustomEditor {
 		const minRightBorder = 1; // keep at least one border cell on the right
 		const maxLabelLen = Math.max(0, width - prefix.length - labelLeftSpace.length - labelRightSpace.length - minRightBorder);
 		if (maxLabelLen <= 0) return lines;
-		if (label.length > maxLabelLen) label = label.slice(0, maxLabelLen);
 
-		const labelChunk = `${labelLeftSpace}${label}${labelRightSpace}`;
+		let labelLen = labelParts.reduce((sum, part) => sum + part.text.length, 0);
+		if (labelLen > maxLabelLen) {
+			let remainingLen = maxLabelLen;
+			for (const part of labelParts) {
+				if (remainingLen <= 0) {
+					part.text = "";
+					continue;
+				}
+				if (part.text.length > remainingLen) {
+					part.text = part.text.slice(0, remainingLen);
+					remainingLen = 0;
+				} else {
+					remainingLen -= part.text.length;
+				}
+			}
+			labelLen = maxLabelLen;
+		}
 
-		const remaining = width - prefix.length - labelChunk.length;
+		const labelChunkLen = labelLeftSpace.length + labelLen + labelRightSpace.length;
+		const remaining = width - prefix.length - labelChunkLen;
 		if (remaining < 0) return lines;
 
 		const right = "─".repeat(Math.max(0, remaining));
-
-		const labelColor = this.modeLabelColor ?? ((text: string) => this.borderColor(text));
-		lines[0] = this.borderColor(prefix) + labelColor(labelChunk) + this.borderColor(right);
+		const coloredLabel = labelParts.map((part) => (part.text ? part.color(part.text) : "")).join("");
+		lines[0] =
+			this.borderColor(prefix) +
+			(labelLeftSpace ? labelColor(labelLeftSpace) : "") +
+			coloredLabel +
+			(labelRightSpace ? labelColor(labelRightSpace) : "") +
+			this.borderColor(right);
 		return lines;
 	}
 
@@ -1143,18 +1178,19 @@ function historiesMatch(a: PromptEntry[], b: PromptEntry[]): boolean {
 }
 
 function setEditor(pi: ExtensionAPI, ctx: ExtensionContext, history: PromptEntry[]) {
+	const uiTheme = ctx.ui.theme;
 	ctx.ui.setEditorComponent((tui, theme, keybindings) => {
 		const editor = new PromptEditor(tui, theme, keybindings);
 		requestEditorRender = () => editor.requestRenderNow();
 		editor.modeLabelProvider = () => runtime.currentMode;
 		// Keep the mode label color stable (match footer/status bar).
-		editor.modeLabelColor = (text: string) => ctx.ui.theme.fg("dim", text);
+		editor.modeLabelColor = (text: string) => uiTheme.fg("dim", text);
 		const borderColor = (text: string) => {
 			const isBashMode = editor.getText().trimStart().startsWith("!");
 			if (isBashMode) {
-				return ctx.ui.theme.getBashModeBorderColor()(text);
+				return uiTheme.getBashModeBorderColor()(text);
 			}
-			return getModeBorderColor(ctx, pi, runtime.currentMode)(text);
+			return getModeBorderColor(uiTheme, pi, runtime.currentMode)(text);
 		};
 
 		editor.borderColor = borderColor;
@@ -1267,25 +1303,7 @@ export default function (pi: ExtensionAPI) {
 		applyEditor(pi, ctx);
 	});
 
-	pi.on("session_switch", async (_event, ctx) => {
-		lastObservedModel = { provider: ctx.model?.provider, modelId: ctx.model?.id };
-		await ensureRuntime(pi, ctx);
-		customOverlay = null;
-
-		const inferred = inferModeFromSelection(ctx, pi, runtime.data);
-		if (inferred) {
-			runtime.currentMode = inferred;
-			runtime.lastRealMode = inferred;
-		} else {
-			runtime.currentMode = CUSTOM_MODE_NAME;
-			customOverlay = getCurrentSelectionSpec(pi, ctx);
-		}
-
-		applyEditor(pi, ctx);
-	});
-
-
-	pi.on("model_select", async (event: ModelSelectEvent, ctx) => {
+	pi.on("model_select", async (event, ctx) => {
 		// Always track the last observed model for overlay/store correctness.
 		lastObservedModel = { provider: event.model.provider, modelId: event.model.id };
 
