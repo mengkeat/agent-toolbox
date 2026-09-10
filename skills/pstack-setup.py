@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Install or refresh the pstack skill for pi.
 
-Clones (or fast-forwards) cursor/plugins, then writes one hidden, opt-in wrapper
-skill that exposes the whole pstack tree. pi stops recursing a skills directory
-at the first SKILL.md it finds, so the wrapper registers one hidden skill while
-contributing zero system-prompt entries; every file under skills/ stays
-readable by path.
+Clones (or fast-forwards) the upstream pstack source, then writes one hidden,
+opt-in wrapper skill and a Pi-adapted copy of the pstack tree. pi stops
+recursing a skills directory at the first SKILL.md it finds, so the wrapper
+registers one hidden skill while contributing zero system-prompt entries; every
+file under skills/ stays readable by path.
 
 Run: python3 ~/.pi/agent/skills/pstack-setup.py [repo_dir]
 
@@ -16,6 +16,7 @@ backed up to SKILL.md.bak before it is replaced.
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 import sys
@@ -124,19 +125,95 @@ def write_wrapper() -> None:
     print(f"wrote {path}")
 
 
+PI_REPLACEMENTS = (
+    ("~/.cursor/projects/<slug>/agent-transcripts/<uuid>/<uuid>.jsonl", "the active workspace's agent-transcripts path named by the Pi system prompt"),
+    ("~/.cursor/projects/*/", "other workspace transcript roots"),
+    ("~/.cursor/rules/pstack-models.mdc", "an explicitly provided model configuration"),
+    ("~/.cursor/skills/", "~/.pi/agent/skills/"),
+    (".cursor/skills/", ".pi/skills/"),
+    ("Cursor's built-in `create-skill`", "the `authoring-a-skill` playbook"),
+    ("Cursor's built-in `/create-skill`", "the `authoring-a-skill` playbook"),
+    ("Cursor's built-in create-skill", "the `authoring-a-skill` playbook"),
+    ("Cursor's built-in babysit skill", "the built-in babysit skill"),
+    ("Cursor environment", "Pi environment"),
+    ("a Cursor restart", "a Pi restart"),
+    ("Cursor restart", "Pi restart"),
+    ("cursor location", "current editor location"),
+    ("Cursor", "Pi"),
+)
+
+
+def adapt_skills(skills: Path) -> None:
+    for path in skills.rglob("SKILL.md"):
+        text = path.read_text()
+        for old, new in PI_REPLACEMENTS:
+            text = text.replace(old, new)
+        path.write_text(text)
+
+    poteto = skills / "poteto-mode" / "SKILL.md"
+    if poteto.is_file():
+        text = poteto.read_text()
+        text = text.replace(
+            "- Before commit → the `deslop` skill from the `cursor-team-kit` plugin (`/deslop`).",
+            "- Before commit → run a locally available `deslop` skill. If it is not installed, skip it.",
+        )
+        text = text.replace(
+            "- Shipping UI / IDE / CLI → the matching control skill. `cursor-team-kit` publishes `control-cli` (CLIs and TUIs) and `control-ui` (browser / Electron / web UIs). For bug fixes, reproduce first on the same surface yourself. Hand to the user only under the narrow Bug fix step 1 exception.",
+            "- Shipping UI / IDE / CLI → use a matching locally available control skill when one exists. For bug fixes, reproduce first on the same surface yourself. Hand to the user only under the narrow Bug fix step 1 exception.",
+        )
+        text = text.replace(
+            "**Defaults for every `Task` call.** `run_in_background: true`, agent mode (readonly strips MCP), file pointers not inlined context, explicit model per role (configurable via `/setup-pstack`. Defaults `grok-4.6-fast-xhigh` for code, `claude-fable-5-1-thinking-max` for prose and judgment). Code delegates tier by difficulty. The hardest changes (cross-cutting design, gnarly concurrency, subtle algorithms) go to your strongest judgment model (`claude-fable-5-1-thinking-max`), whether the task needs judgment on vague intent or is a precisely specified sequence of steps to execute to the letter. Trivial mechanical edits go to your fast code model. Per-role lines in the `/setup-pstack` rule override these defaults and the model choices in the routed skills (`how`, `why`, `arena`, `swarm`, `architect`, `interrogate`, `reflect`). A role with no line keeps its default, and a role line of `inherit-parent` or `auto` runs that role on the parent chat model (omit Task `model`).",
+            "**Defaults for every `subagent` call.** Use file pointers instead of inlining large context. Let subagents inherit the active Pi model unless an explicitly available model is chosen. Put read-only or write constraints in the delegated task because this adapter does not support separate agent-mode flags. Calls may be serialized by the adapter even when a workflow requests fan-out.",
+        )
+        poteto.write_text(text)
+
+    setup = skills / "setup-pstack" / "SKILL.md"
+    if setup.is_file():
+        setup.write_text(
+            """---
+name: setup-pstack
+description: Explain Pi model selection for pstack workflows. Use when configuring pstack models is requested.
+disable-model-invocation: true
+---
+# Setup pstack
+
+Pi supplies the active model to `subagent` calls. This adapter does not use a
+per-role model file or a separate setup command.
+
+Let subagents inherit the active Pi model unless the caller explicitly chooses
+an available provider and model. Put any read-only or write constraints in the
+delegated task. Calls may be serialized by the adapter.
+"""
+        )
+
+    bot_ui = skills / "make-bot-ui" / "SKILL.md"
+    if bot_ui.is_file():
+        bot_ui.write_text(
+            """---
+name: make-bot-ui
+description: This workflow depends on a platform-specific automation service that is not bundled with Pi.
+disable-model-invocation: true
+---
+# Make Bot UI
+
+This workflow is not available in Pi. Skip it rather than guessing at an
+equivalent webhook, credential store, or hosting integration.
+"""
+        )
+
+
 def link_skills(repo: Path) -> None:
     src = repo / "pstack" / "skills"
     if not src.is_dir():
         sys.exit(f"no pstack skills at {src}, is the checkout broken?")
     link = TARGET / "skills"
     if link.is_symlink():
-        if link.resolve() == src.resolve():
-            return
         link.unlink()
     elif link.exists():
-        sys.exit(f"{link} is a real directory, refusing to replace it")
-    link.symlink_to(src, target_is_directory=True)
-    print(f"linked {link} -> {src}")
+        shutil.rmtree(link)
+    shutil.copytree(src, link)
+    adapt_skills(link)
+    print(f"copied and adapted {src} -> {link}")
 
 
 def check(repo: Path) -> None:
@@ -148,7 +225,10 @@ def check(repo: Path) -> None:
     # A bare ": " inside a value makes YAML read a nested mapping and pi drops the skill.
     assert all(": " not in v for v in fields.values()), f"colon in frontmatter value: {fields}"
     assert body.strip(), "wrapper body is empty"
-    assert (TARGET / "skills").resolve() == (repo / "pstack" / "skills").resolve(), "bad link"
+    assert (TARGET / "skills").is_dir(), "missing adapted skills"
+    for path in (TARGET / "skills").rglob("SKILL.md"):
+        text = path.read_text()
+        assert not re.search(r"\bcursor\b|\.cursor", text, re.IGNORECASE), f"unadapted platform reference: {path}"
     required = (
         TARGET / "skills" / "poteto-mode" / "SKILL.md",
         TARGET / "skills" / "poteto-mode" / "playbooks" / "feature.md",
