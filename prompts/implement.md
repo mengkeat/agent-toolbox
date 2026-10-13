@@ -2,7 +2,7 @@
 description: Implement a task in scoped subtasks with progressive commits
 argument-hint: "<task>"
 ---
-Implement: ${@}
+Implement: $ARGUMENTS
 
 Inspect the repository and identify the affected code, callers, tests, and existing uncommitted changes. 
 Break the task into the subtasks and state each subtask's scope and verification before starting.
