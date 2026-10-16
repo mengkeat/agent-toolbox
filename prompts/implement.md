@@ -8,7 +8,7 @@ Inspect the repository and identify the affected code, callers, tests, and exist
 Break the task into the subtasks and state each subtask's scope and verification before starting.
 
 For each subtask, delegate using an available subagent when possible. 
-Choose and specify one model per subtask: `gpt-6.1-sol` at medium thinking, or `gpt-6.1-luna` at high thinking. 
+Choose and specify one model per subtask: `gpt-6.1-sol` at medium thinking, or `gpt-6-luna` at high thinking. 
 Keep subtasks independent. If parallel workers would share files or a working tree, run them sequentially. 
 If no delegation capability is available, say so and continue with the main agent 
 rather than pretending to delegate.
